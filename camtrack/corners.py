@@ -27,7 +27,7 @@ from _corners import (
     calc_track_interval_mappings,
     calc_track_len_array_mapping,
     without_short_tracks,
-    create_cli
+    create_cli, filter_frame_corners
 )
 
 
@@ -46,19 +46,105 @@ class _CornerStorageBuilder:
         return StorageImpl(item[1] for item in sorted(self._corners.items()))
 
 
+class _CornerTracker:
+    PYRAMID_LEVELS = 3
+    BLOCK_SIZE = 7
+    RADIOUS = 7
+    MAX_CORNERS = 1000
+    QUALITY_LEVEL = 0.01
+    MIN_DISTANCE = 1
+
+    def __init__(self, frame_sequence: pims.FramesSequence):
+        self._frame_sequence = frame_sequence
+        self._last_id = 0
+
+    def find_corners(self):
+        image_0 = self._frame_sequence[0]
+        corners = self._process_frame(image_0)
+        yield corners
+        for image_1 in self._frame_sequence[1:]:
+            tracked_corners = self._track_old_corners(image_1, image_0, corners)
+            new_corners = self._process_frame(image_1, tracked_corners.points)
+            if new_corners is not None:
+                corners = FrameCorners(
+                    ids=np.concatenate((tracked_corners.ids, new_corners.ids)),
+                    points=np.concatenate((tracked_corners.points, new_corners.points)),
+                    sizes=np.concatenate((tracked_corners.sizes, new_corners.sizes))
+                )
+            else:
+                corners = tracked_corners
+            image_0 = image_1
+            yield corners
+
+    def _process_frame(self, image, points_to_exclude=None):
+        number_of_found_corners = 0 if points_to_exclude is None else points_to_exclude.shape[0]
+        shape = image.shape
+        points, indices, sizes = [], [], []
+        block_size = self.BLOCK_SIZE
+        for i in range(self.PYRAMID_LEVELS):
+            if number_of_found_corners >= self.MAX_CORNERS:
+                break
+            mask = self._create_mask(points_to_exclude, shape)[::2 ** i, ::2 ** i]
+            found_points = cv2.goodFeaturesToTrack(image=image,
+                                                   maxCorners=self.MAX_CORNERS - number_of_found_corners,
+                                                   qualityLevel=self.QUALITY_LEVEL,
+                                                   minDistance=self.MIN_DISTANCE,
+                                                   blockSize=self.BLOCK_SIZE,
+                                                   mask=mask)
+            found_points *= 2 ** i
+            found_points = found_points.reshape(-1, 2)
+            number_of_found_corners += found_points.shape[0]
+            cur_sizes = np.full(shape=found_points.shape[0], fill_value=block_size)
+            cur_indices = np.arange(self._last_id, self._last_id + len(found_points))
+            self._last_id += len(found_points)
+            points.append(found_points)
+            sizes.append(cur_sizes)
+            indices.append(cur_indices)
+            block_size *= 2
+            if points_to_exclude is not None:
+                points_to_exclude = np.concatenate((points_to_exclude, found_points))
+            else:
+                points_to_exclude = found_points
+            image = cv2.pyrDown(image)
+        if len(points) == 0:
+            return None
+        return FrameCorners(ids=np.concatenate(tuple(indices)),
+                            points=np.concatenate(tuple(points)),
+                            sizes=np.concatenate(tuple(sizes)))
+
+    @staticmethod
+    def _create_mask(points_to_exclude, shape):
+        res = np.full(shape=shape, fill_value=255, dtype=np.uint8)
+        if points_to_exclude is None:
+            return res
+        for p in points_to_exclude:
+            cv2.circle(res, center=tuple(p),
+                       radius=_CornerTracker.RADIOUS, color=0)
+        return res
+
+    @staticmethod
+    def _track_old_corners(image, prev_image, prev_corners):
+        def to_uint8(img):
+            return np.array(img * 255, dtype=np.uint8)
+
+        image = to_uint8(image)
+        prev_image = to_uint8(prev_image)
+        coords, status, _ = cv2.calcOpticalFlowPyrLK(prevImg=prev_image,
+                                                     nextImg=image,
+                                                     prevPts=prev_corners.points,
+                                                     nextPts=None)
+        status = status.ravel()
+        tracked_corners = filter_frame_corners(prev_corners, status == 1)
+        return FrameCorners(points=coords[status == 1],
+                            ids=tracked_corners.ids,
+                            sizes=tracked_corners.sizes)
+
+
 def _build_impl(frame_sequence: pims.FramesSequence,
                 builder: _CornerStorageBuilder) -> None:
-    # TODO
-    image_0 = frame_sequence[0]
-    corners = FrameCorners(
-        np.array([0]),
-        np.array([[0, 0]]),
-        np.array([55])
-    )
-    builder.set_corners_at_frame(0, corners)
-    for frame, image_1 in enumerate(frame_sequence[1:], 1):
-        builder.set_corners_at_frame(frame, corners)
-        image_0 = image_1
+    ct = _CornerTracker(frame_sequence)
+    for i, c in enumerate(ct.find_corners()):
+        builder.set_corners_at_frame(i, c)
 
 
 def build(frame_sequence: pims.FramesSequence,
