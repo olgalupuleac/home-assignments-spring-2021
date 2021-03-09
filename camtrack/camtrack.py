@@ -39,7 +39,7 @@ def track_and_calc_colors(camera_parameters: CameraParameters,
         camera_parameters,
         rgb_sequence[0].shape[0]
     )
-
+    random.seed(11071998)
     frame_count = len(corner_storage)
     point_cloud_builder = PointCloudBuilder()
     calc_ids = [known_view_1[0], known_view_2[0]]
