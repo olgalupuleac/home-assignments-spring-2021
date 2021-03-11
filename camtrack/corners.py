@@ -67,7 +67,7 @@ class _CornerTracker:
             new_corners = self._process_frame(image_1, tracked_corners.points)
             if new_corners is not None:
                 corners = FrameCorners(
-                    ids=np.concatenate((tracked_corners.ids, new_corners.ids)),
+                    ids=np.concatenate((tracked_corners.ids, new_corners.ids)).astype(np.int64),
                     points=np.concatenate((tracked_corners.points, new_corners.points)),
                     sizes=np.concatenate((tracked_corners.sizes, new_corners.sizes))
                 )
@@ -108,7 +108,7 @@ class _CornerTracker:
             image = cv2.pyrDown(image)
         if len(points) == 0:
             return None
-        return FrameCorners(ids=np.concatenate(tuple(indices)),
+        return FrameCorners(ids=np.concatenate(tuple(indices)).astype(np.int64),
                             points=np.concatenate(tuple(points)),
                             sizes=np.concatenate(tuple(sizes)))
 

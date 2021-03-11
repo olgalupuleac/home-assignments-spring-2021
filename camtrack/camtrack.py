@@ -55,7 +55,7 @@ def track_and_calc_colors(camera_parameters: CameraParameters,
             cors = build_correspondences(
                 corner_storage[known1],
                 corner_storage[known2],
-                ids_to_remove=point_cloud_builder.ids.astype(np.int32)
+                ids_to_remove=point_cloud_builder.ids
             )
             print(f'Found {len(cors.ids)} correspondences for frames {known1}, {known2}')
             if len(cors.ids) == 0:
