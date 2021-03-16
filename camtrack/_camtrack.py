@@ -13,7 +13,6 @@ __all__ = [
     'eye3x4',
     'pose_to_view_mat3x4',
     'project_points',
-    'remove_correspondences_with_ids',
     'rodrigues_and_translation_to_view_mat3x4',
     'to_camera_center',
     'to_opencv_camera_mat3x3',
@@ -130,7 +129,7 @@ TriangulationParameters = namedtuple(
 )
 
 
-def remove_correspondences_with_ids(correspondences: Correspondences,
+def _remove_correspondences_with_ids(correspondences: Correspondences,
                                      ids_to_remove: np.ndarray) \
         -> Correspondences:
     ids = correspondences.ids.flatten()
@@ -156,7 +155,7 @@ def build_correspondences(corners_1: FrameCorners, corners_2: FrameCorners,
         corners_2.points[indices_2]
     )
     if ids_to_remove is not None:
-        corrs = remove_correspondences_with_ids(corrs, ids_to_remove)
+        corrs = _remove_correspondences_with_ids(corrs, ids_to_remove)
     return corrs
 
 

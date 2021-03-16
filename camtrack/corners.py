@@ -48,11 +48,11 @@ class _CornerStorageBuilder:
 
 class _CornerTracker:
     PYRAMID_LEVELS = 3
-    BLOCK_SIZE = 7
+    BLOCK_SIZE = 10
     RADIOUS = 7
     MAX_CORNERS = 1000
     QUALITY_LEVEL = 0.01
-    MIN_DISTANCE = 1
+    MIN_DISTANCE = 2
 
     def __init__(self, frame_sequence: pims.FramesSequence):
         self._frame_sequence = frame_sequence
@@ -99,7 +99,7 @@ class _CornerTracker:
             self._last_id += len(found_points)
             points.append(found_points)
             sizes.append(cur_sizes)
-            indices.append(cur_indices)
+            indices.append(cur_indices.astype(np.int64))
             block_size *= 2
             if points_to_exclude is not None:
                 points_to_exclude = np.concatenate((points_to_exclude, found_points))
@@ -136,7 +136,7 @@ class _CornerTracker:
         status = status.ravel()
         tracked_corners = filter_frame_corners(prev_corners, status == 1)
         return FrameCorners(points=coords[status == 1],
-                            ids=tracked_corners.ids,
+                            ids=tracked_corners.ids.astype(np.int64),
                             sizes=tracked_corners.sizes)
 
 
